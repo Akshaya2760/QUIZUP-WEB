@@ -1,0 +1,6 @@
+{
+  "name": "QUIZUP - College Quiz & Competition Platform",
+  "description": "Interactive college quiz and competition platform featuring student registration & admin approvals, timed contests, deterministic leaderboards, MongoDB persistence, and Gemini AI study assistant.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
