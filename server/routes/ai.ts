@@ -4,23 +4,28 @@ import { requireAuth } from '../middleware/auth.ts';
 
 const router = Router();
 
-// Fallback models in priority order to guarantee 100% resilience against 503 capacity spikes
+// Fallback models in priority order to guarantee 100% resilience against 429 quota limits and 503 capacity spikes
 const CANDIDATE_MODELS = [
   'gemini-3.5-flash',
-  'gemini-3.8-flash',
-  'gemini-flash-latest',
-  'gemini-3.1-flash-lite',
   'gemini-3.5-flash-lite',
+  'gemini-3.1-flash-lite',
+  'gemini-flash-latest',
+  'gemini-3.8-flash',
 ];
 
 // Initialize GoogleGenAI if key available
 function getGenAIClient(): GoogleGenAI | null {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey || apiKey === 'MY_GEMINI_API_KEY' || apiKey.trim() === '') {
+  const apiKey =
+    process.env.GEMINI_API_KEY ||
+    process.env.GOOGLE_API_KEY ||
+    process.env.API_KEY ||
+    process.env.VITE_GEMINI_API_KEY;
+
+  if (!apiKey || typeof apiKey !== 'string' || apiKey === 'MY_GEMINI_API_KEY' || apiKey.trim() === '') {
     return null;
   }
   return new GoogleGenAI({
-    apiKey,
+    apiKey: apiKey.trim(),
     httpOptions: {
       headers: {
         'User-Agent': 'aistudio-build',
@@ -31,6 +36,7 @@ function getGenAIClient(): GoogleGenAI | null {
 
 /**
  * Executes a Gemini generateContent request with multi-model failover
+ * Automatically catches 429 (quota exceeded), 503 (high demand), and 404
  */
 async function generateWithFallback(ai: GoogleGenAI, requestPayload: any) {
   let lastErr: any = null;
@@ -46,13 +52,23 @@ async function generateWithFallback(ai: GoogleGenAI, requestPayload: any) {
     } catch (err: any) {
       lastErr = err;
       const msg = String(err?.message || '');
-      if (
+      const status = Number(err?.status || err?.code || 0);
+
+      const isRecoverableError =
+        status === 429 ||
+        status === 503 ||
+        status === 404 ||
+        msg.includes('429') ||
+        msg.includes('quota') ||
+        msg.includes('RESOURCE_EXHAUSTED') ||
         msg.includes('503') ||
         msg.includes('high demand') ||
         msg.includes('UNAVAILABLE') ||
-        msg.includes('404')
-      ) {
-        console.warn(`[Gemini AI] Model ${model} returned high demand / 503, falling back to next candidate...`);
+        msg.includes('404') ||
+        msg.includes('rate-limit');
+
+      if (isRecoverableError) {
+        console.warn(`[Gemini AI] Model ${model} returned code ${status || 'ERR'} (${msg.substring(0, 90)}), switching to next candidate model...`);
         continue;
       }
       throw err;
@@ -102,6 +118,17 @@ ${context ? `Context from student attempt: ${JSON.stringify(context)}` : ''}`;
     });
   } catch (err: any) {
     console.error('Gemini AI error (/ask):', err.message);
+    const msg = String(err?.message || '');
+    const status = Number(err?.status || err?.code || 0);
+
+    if (status === 429 || msg.includes('429') || msg.includes('quota') || msg.includes('RESOURCE_EXHAUSTED')) {
+      return res.json({
+        available: true,
+        answer: "⚡ **Professor Byte Notice:** Free-tier AI consultation daily quota is currently recharging. You can continue taking quizzes directly and review detailed question explanations!",
+        rateLimited: true,
+      });
+    }
+
     return res.status(500).json({
       available: false,
       error: 'AI_GENERATION_FAILED',
@@ -301,6 +328,17 @@ Your mission:
     });
   } catch (err: any) {
     console.error('Gemini Chat error (/chat):', err.message);
+    const msg = String(err?.message || '');
+    const status = Number(err?.status || err?.code || 0);
+
+    if (status === 429 || msg.includes('429') || msg.includes('quota') || msg.includes('RESOURCE_EXHAUSTED')) {
+      return res.json({
+        available: true,
+        reply: "⚡ **Byte AI Notice:** Our real-time free tier AI quota has reached its daily peak. The quota automatically resets on a rolling schedule. In the meantime, you can explore quizzes, practice questions, and review your performance stats!",
+        rateLimited: true,
+      });
+    }
+
     return res.status(500).json({
       available: false,
       error: 'CHAT_FAILED',

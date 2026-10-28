@@ -99,10 +99,15 @@ Ask me to explain complex topics, test your knowledge with instant practice ques
 
       setMessages((prev) => [...prev, aiMsg]);
     } catch (err: any) {
+      const rawMsg = String(err.message || '');
+      let displayText = `⚠️ ${rawMsg || 'I had trouble connecting to the Gemini server. Please try asking again in a moment.'}`;
+      if (rawMsg.includes('not configured') || rawMsg.includes('AI_KEY_NOT_CONFIGURED')) {
+        displayText = `⚠️ **Gemini API Key Not Configured on Server**\n\nThe server environment does not have a valid Gemini API key set.\n\n- **On Vercel:** Go to **Project Settings > Environment Variables**, add \`GEMINI_API_KEY\` with your Gemini API key from Google AI Studio, and redeploy.\n- **Local / Self-hosted:** Add \`GEMINI_API_KEY=your_key_here\` to your \`.env\` file and restart the server.`;
+      }
       const errorMsg: ChatMessage = {
         id: `ai-err-${Date.now()}`,
         sender: 'ai',
-        text: `⚠️ ${err.message || 'I had trouble connecting to the Gemini server. Please try asking again in a moment.'}`,
+        text: displayText,
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, errorMsg]);

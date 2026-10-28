@@ -640,16 +640,21 @@ router.post('/admin/generate-ai-quiz', ensureDbConnected, requireAdmin, async (r
       return res.status(400).json({ error: 'MISSING_TOPIC', message: 'A topic is required to generate the quiz.' });
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey || apiKey === 'MY_GEMINI_API_KEY' || apiKey.trim() === '') {
+    const apiKey =
+      process.env.GEMINI_API_KEY ||
+      process.env.GOOGLE_API_KEY ||
+      process.env.API_KEY ||
+      process.env.VITE_GEMINI_API_KEY;
+
+    if (!apiKey || typeof apiKey !== 'string' || apiKey === 'MY_GEMINI_API_KEY' || apiKey.trim() === '') {
       return res.status(503).json({
         error: 'AI_KEY_NOT_CONFIGURED',
-        message: 'Gemini AI API key is not configured on this server.',
+        message: 'Gemini AI API key is not configured on this server. Please set GEMINI_API_KEY in your deployment environment variables.',
       });
     }
 
     const ai = new GoogleGenAI({
-      apiKey,
+      apiKey: apiKey.trim(),
       httpOptions: {
         headers: {
           'User-Agent': 'aistudio-build',
@@ -692,10 +697,10 @@ Important requirements:
 
     const candidateModels = [
       'gemini-3.5-flash',
-      'gemini-3.8-flash',
-      'gemini-flash-latest',
-      'gemini-3.1-flash-lite',
       'gemini-3.5-flash-lite',
+      'gemini-3.1-flash-lite',
+      'gemini-flash-latest',
+      'gemini-3.8-flash',
     ];
     let response: any = null;
     let lastErr: any = null;
@@ -715,8 +720,23 @@ Important requirements:
       } catch (err: any) {
         lastErr = err;
         const msg = String(err?.message || '');
-        if (msg.includes('503') || msg.includes('high demand') || msg.includes('UNAVAILABLE')) {
-          console.warn(`[Gemini AI Quiz] Model ${model} returned 503 high demand, attempting fallback...`);
+        const status = Number(err?.status || err?.code || 0);
+
+        const isRecoverable =
+          status === 429 ||
+          status === 503 ||
+          status === 404 ||
+          msg.includes('429') ||
+          msg.includes('quota') ||
+          msg.includes('RESOURCE_EXHAUSTED') ||
+          msg.includes('503') ||
+          msg.includes('high demand') ||
+          msg.includes('UNAVAILABLE') ||
+          msg.includes('404') ||
+          msg.includes('rate-limit');
+
+        if (isRecoverable) {
+          console.warn(`[Gemini AI Quiz] Model ${model} returned error code ${status || 'ERR'} (${msg.substring(0, 90)}), switching to next model...`);
           continue;
         }
         throw err;
@@ -805,6 +825,16 @@ Important requirements:
     });
   } catch (err: any) {
     console.error('AI Quiz Generation error:', err);
+    const msg = String(err?.message || '');
+    const status = Number(err?.status || err?.code || 0);
+
+    if (status === 429 || msg.includes('429') || msg.includes('quota') || msg.includes('RESOURCE_EXHAUSTED')) {
+      return res.status(429).json({
+        error: 'AI_QUOTA_REACHED',
+        message: 'Daily AI quiz generation free tier quota reached. Please try again after quota resets, or create a custom quiz manually in the Quiz Creator!',
+      });
+    }
+
     return res.status(500).json({
       error: 'AI_QUIZ_GEN_FAILED',
       message: err.message || 'Failed to generate quiz with Gemini AI.',
