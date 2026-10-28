@@ -120,22 +120,7 @@ export function requireApprovedStudent(req: Request, res: Response, next: NextFu
     return next();
   }
 
-  if (req.session.status === 'pending') {
-    return res.status(403).json({
-      error: 'ACCOUNT_PENDING',
-      message: 'Your registration is currently pending administrator verification. You cannot take quizzes yet.',
-      status: 'pending',
-    });
-  }
-
-  if (req.session.status === 'rejected') {
-    return res.status(403).json({
-      error: 'ACCOUNT_REJECTED',
-      message: 'Your account registration was rejected by an administrator.',
-      status: 'rejected',
-    });
-  }
-
+  // Open registration: any registered student has immediate access
   if (req.session.status === 'suspended') {
     return res.status(403).json({
       error: 'ACCOUNT_SUSPENDED',
@@ -144,11 +129,11 @@ export function requireApprovedStudent(req: Request, res: Response, next: NextFu
     });
   }
 
-  if (req.session.status !== 'approved') {
+  if (req.session.status === 'rejected') {
     return res.status(403).json({
-      error: 'ACCOUNT_NOT_APPROVED',
-      message: 'Your account is not approved to access this resource.',
-      status: req.session.status,
+      error: 'ACCOUNT_REJECTED',
+      message: 'Your account registration was rejected by an administrator.',
+      status: 'rejected',
     });
   }
 

@@ -91,7 +91,7 @@ export function AdminDashboard({ onNavigate }: AdminDashboardProps) {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Pending Approvals Card */}
         <div
-          onClick={() => onNavigate('admin-approvals')}
+          onClick={() => onNavigate('admin-approvals', { initialFilter: 'pending' })}
           className="p-5 rounded-2xl bg-[#0d152c]/90 border border-amber-500/20 hover:border-amber-500/40 cursor-pointer transition-all shadow-md"
         >
           <div className="flex items-center justify-between text-slate-400 mb-1.5">
@@ -106,7 +106,7 @@ export function AdminDashboard({ onNavigate }: AdminDashboardProps) {
 
         {/* Total Students Card */}
         <div
-          onClick={() => onNavigate('admin-approvals')}
+          onClick={() => onNavigate('admin-approvals', { initialFilter: 'approved' })}
           className="p-5 rounded-2xl bg-[#0d152c]/90 border border-amber-500/20 hover:border-amber-500/40 cursor-pointer transition-all shadow-md"
         >
           <div className="flex items-center justify-between text-slate-400 mb-1.5">
@@ -268,10 +268,10 @@ export function AdminDashboard({ onNavigate }: AdminDashboardProps) {
           </div>
 
           <button
-            onClick={() => onNavigate('admin-approvals')}
+            onClick={() => onNavigate('admin-approvals', { initialFilter: 'approved' })}
             className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-amber-300 border border-amber-500/30 text-xs font-semibold transition-all shrink-0 cursor-pointer flex items-center gap-1.5"
           >
-            <span>Full Approvals Roster</span>
+            <span>Full Approvals Roster ({stats?.students?.approved ?? 0})</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>

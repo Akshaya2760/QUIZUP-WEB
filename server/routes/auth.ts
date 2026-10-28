@@ -69,8 +69,9 @@ router.post('/register', ensureDbConnected, async (req: Request, res: Response) 
       yearOfStudy: Number(yearOfStudy) || 1,
       passwordHash,
       role: 'student',
-      status: 'pending', // Pending administrator approval
-      badges: ['New Cadet', 'Registration Completed'],
+      status: 'approved', // Open registration: anyone can register and login immediately
+      approvedAt: new Date(),
+      badges: ['New Cadet', 'Verified Scholar', 'Registration Completed'],
     });
 
     console.log(`[Auth/Register] Student created successfully in MongoDB: ${newUser.email} (id: ${newUser.id}, _id: ${newUser._id})`);
@@ -106,7 +107,7 @@ router.post('/register', ensureDbConnected, async (req: Request, res: Response) 
     });
 
     return res.status(201).json({
-      message: 'Registration successful! Your account is awaiting administrator approval.',
+      message: 'Registration successful! Welcome to QUIZUP. Your account is active and you can start taking quizzes.',
       token,
       user: {
         id: newUser.id,
@@ -159,31 +160,73 @@ router.post('/login', ensureDbConnected, async (req: Request, res: Response) => 
       });
     }
 
-    const normalizedEmail = email.trim().toLowerCase();
-    const user = await User.findOne({ email: normalizedEmail });
+    const normalizedInput = email.trim().toLowerCase();
+    const user = await User.findOne({
+      $or: [
+        { email: normalizedInput },
+        { collegeEmail: normalizedInput },
+        { username: normalizedInput },
+        { email: new RegExp(`^${normalizedInput}$`, 'i') },
+      ],
+    });
 
     if (!user) {
-      console.warn(`[Auth/Login] Login failed: User "${normalizedEmail}" not found.`);
+      console.warn(`[Auth/Login] Login failed: User "${normalizedInput}" not found.`);
       return res.status(401).json({
         error: 'INVALID_CREDENTIALS',
         message: 'Invalid email or password.',
+        detail: 'user_not_found',
       });
     }
 
-    const isMatch = await bcrypt.compare(password, user.passwordHash);
+    const hashToCompare = user.passwordHash || (user as any).password;
+    if (!hashToCompare) {
+      console.warn(`[Auth/Login] User "${normalizedInput}" has no stored password.`);
+      return res.status(401).json({
+        error: 'INVALID_CREDENTIALS',
+        message: 'Invalid email or password.',
+        detail: 'no_hash',
+      });
+    }
+
+    const isMatch = await bcrypt.compare(password, hashToCompare);
     if (!isMatch) {
-      console.warn(`[Auth/Login] Login failed: Incorrect password for "${normalizedEmail}".`);
+      console.warn(`[Auth/Login] Login failed: Incorrect password for "${normalizedInput}".`);
       return res.status(401).json({
         error: 'INVALID_CREDENTIALS',
         message: 'Invalid email or password.',
+        detail: 'password_mismatch',
       });
     }
 
-    // If legacy user lacks an 'id', assign one on the fly
+    // Ensure user has name, email, and id populated
+    if (!user.name && (user as any).fullName) {
+      user.name = (user as any).fullName;
+    }
+    if (!user.email && (user as any).collegeEmail) {
+      user.email = (user as any).collegeEmail;
+    }
     if (!user.id) {
       user.id = generateUserIdentifier(user.role);
-      await user.save();
     }
+
+    // Direct registration: ensure any student is immediately approved and active
+    const nextStatus = user.role === 'student' && user.status === 'pending' ? 'approved' : user.status;
+    user.status = nextStatus as any;
+
+    await User.updateOne(
+      { _id: user._id },
+      {
+        $set: {
+          id: user.id,
+          name: user.name || 'User',
+          email: user.email || normalizedInput,
+          passwordHash: hashToCompare,
+          status: nextStatus,
+          approvedAt: user.approvedAt || new Date(),
+        },
+      }
+    );
 
     console.log(`[Auth/Login] Successful login for: ${user.email} (Role: ${user.role}, Status: ${user.status})`);
 

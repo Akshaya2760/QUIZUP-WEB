@@ -29,11 +29,11 @@ router.get('/stats', async (req: Request, res: Response) => {
       pendingRequestsList,
       approvedStudentsList,
     ] = await Promise.all([
-      User.countDocuments({ role: { $in: ['student', 'STUDENT'] } }),
-      User.countDocuments({ role: { $in: ['student', 'STUDENT'] }, status: { $regex: /^pending$/i } }),
-      User.countDocuments({ role: { $in: ['student', 'STUDENT'] }, status: { $regex: /^approved$/i } }),
-      User.countDocuments({ role: { $in: ['student', 'STUDENT'] }, status: { $regex: /^rejected$/i } }),
-      User.countDocuments({ role: { $in: ['student', 'STUDENT'] }, status: { $regex: /^suspended$/i } }),
+      User.countDocuments({ role: { $in: ['student', 'STUDENT'] } } as any),
+      User.countDocuments({ role: { $in: ['student', 'STUDENT'] }, status: { $regex: /^pending$/i } } as any),
+      User.countDocuments({ role: { $in: ['student', 'STUDENT'] }, status: { $regex: /^approved$/i } } as any),
+      User.countDocuments({ role: { $in: ['student', 'STUDENT'] }, status: { $regex: /^rejected$/i } } as any),
+      User.countDocuments({ role: { $in: ['student', 'STUDENT'] }, status: { $regex: /^suspended$/i } } as any),
       Quiz.countDocuments(),
       Quiz.countDocuments({ isPublished: true }),
       Attempt.countDocuments({ status: { $in: ['submitted', 'timed_out'] } }),
@@ -44,11 +44,11 @@ router.get('/stats', async (req: Request, res: Response) => {
       AuditLog.find()
         .sort({ createdAt: -1 })
         .limit(10),
-      User.find({ role: { $in: ['student', 'STUDENT'] }, status: { $regex: /^pending$/i } })
+      User.find({ role: { $in: ['student', 'STUDENT'] }, status: { $regex: /^pending$/i } } as any)
         .sort({ createdAt: -1 })
         .limit(25)
         .select('-passwordHash'),
-      User.find({ role: { $in: ['student', 'STUDENT'] }, status: { $regex: /^approved$/i } })
+      User.find({ role: { $in: ['student', 'STUDENT'] }, status: { $regex: /^approved$/i } } as any)
         .sort({ approvedAt: -1, updatedAt: -1, createdAt: -1 })
         .limit(25)
         .select('-passwordHash'),
@@ -106,15 +106,32 @@ router.get('/students', async (req: Request, res: Response) => {
 
     const query: any = { role: { $in: ['student', 'STUDENT'] } };
 
-    if (status && status !== 'all') {
+    if (
+      status &&
+      status !== 'all' &&
+      status !== 'undefined' &&
+      status !== 'null' &&
+      String(status).trim()
+    ) {
       query.status = { $regex: new RegExp(`^${String(status).trim()}$`, 'i') };
     }
 
-    if (department && department !== 'all') {
-      query.department = department;
+    if (
+      department &&
+      department !== 'all' &&
+      department !== 'undefined' &&
+      department !== 'null' &&
+      String(department).trim()
+    ) {
+      query.department = String(department).trim();
     }
 
-    if (search) {
+    if (
+      search &&
+      search !== 'undefined' &&
+      search !== 'null' &&
+      String(search).trim()
+    ) {
       const searchRegex = new RegExp(String(search).trim(), 'i');
       query.$or = [
         { name: searchRegex },
@@ -125,7 +142,7 @@ router.get('/students', async (req: Request, res: Response) => {
 
     const students = await User.find(query)
       .select('-passwordHash')
-      .sort({ createdAt: -1 })
+      .sort({ approvedAt: -1, updatedAt: -1, createdAt: -1 })
       .skip(Number(skip))
       .limit(Number(limit));
 

@@ -77,6 +77,31 @@ export async function sanitizeSessionIndexes(db: mongoose.mongo.Db) {
       await db.collection('sessions').dropIndex('expiresAt_1');
       console.log('[Database] Successfully removed expiresAt_1 index.');
     }
+
+    // Clean harmful legacy indexes from quizzes & attempts
+    try {
+      const quizIndexes = await db.collection('quizzes').indexes();
+      const quizIdIdx = quizIndexes.find((i) => i.name === 'id_1');
+      if (quizIdIdx) {
+        console.log('[Database] Removing legacy id_1 index from quizzes...');
+        await db.collection('quizzes').dropIndex('id_1');
+        console.log('[Database] Successfully removed id_1 index from quizzes.');
+      }
+    } catch {
+      // Ignore if quizzes collection doesn't exist
+    }
+
+    try {
+      const attemptIndexes = await db.collection('attempts').indexes();
+      const attemptIdIdx = attemptIndexes.find((i) => i.name === 'id_1');
+      if (attemptIdIdx) {
+        console.log('[Database] Removing legacy id_1 index from attempts...');
+        await db.collection('attempts').dropIndex('id_1');
+        console.log('[Database] Successfully removed id_1 index from attempts.');
+      }
+    } catch {
+      // Ignore if attempts collection doesn't exist
+    }
   } catch (err: any) {
     // If collection does not exist yet or index already dropped, ignore
   }

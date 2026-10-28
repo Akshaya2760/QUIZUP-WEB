@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './context/AuthContext.tsx';
 import { Navbar } from './components/common/Navbar.tsx';
 import { Sidebar } from './components/common/Sidebar.tsx';
 import { DatabaseBanner } from './components/common/DatabaseBanner.tsx';
+import { GeminiChatbot } from './components/chat/GeminiChatbot.tsx';
 
 // 21 Required Pages
 import { LandingPage } from './pages/LandingPage.tsx';
@@ -47,12 +48,10 @@ function MainRouter() {
           setCurrentView('admin-dashboard');
         }
       } else if (user.role === 'student') {
-        if (user.status === 'pending') {
-          setCurrentView('pending-approval');
-        } else if (user.status === 'suspended' || user.status === 'rejected') {
+        if (user.status === 'suspended' || user.status === 'rejected') {
           setCurrentView('account-status');
-        } else if (user.status === 'approved') {
-          if (currentView === 'landing' || currentView === 'student-login' || currentView === 'student-register') {
+        } else {
+          if (currentView === 'landing' || currentView === 'student-login' || currentView === 'student-register' || currentView === 'pending-approval') {
             setCurrentView('student-dashboard');
           }
         }
@@ -77,11 +76,7 @@ function MainRouter() {
         window.scrollTo({ top: 0, behavior: 'smooth' });
         return;
       }
-      // Pending, rejected, or suspended students cannot access quizzes or dashboard
-      if (user.status === 'pending' && !['pending-approval', 'leaderboard', 'student-profile'].includes(view)) {
-        setCurrentView('pending-approval');
-        return;
-      }
+      // Suspended or rejected students are directed to account status
       if ((user.status === 'suspended' || user.status === 'rejected') && view !== 'account-status') {
         setCurrentView('account-status');
         return;
@@ -178,7 +173,9 @@ function MainRouter() {
 
           {/* Administrator Protected Views */}
           {currentView === 'admin-dashboard' && <AdminDashboard onNavigate={handleNavigate} />}
-          {currentView === 'admin-approvals' && <AdminApprovalsPage onNavigate={handleNavigate} />}
+          {currentView === 'admin-approvals' && (
+            <AdminApprovalsPage onNavigate={handleNavigate} initialFilter={viewParams.initialFilter} />
+          )}
           {currentView === 'admin-quizzes' && <AdminQuizManagementPage />}
           {currentView === 'admin-analytics' && <AdminResultsAnalyticsPage />}
           {currentView === 'admin-announcements' && <AdminAnnouncementsPage />}
@@ -202,6 +199,9 @@ function MainRouter() {
           </div>
         </footer>
       )}
+
+      {/* Floating Gemini Chatbot */}
+      {currentView !== 'live-quiz' && <GeminiChatbot />}
     </div>
   );
 }

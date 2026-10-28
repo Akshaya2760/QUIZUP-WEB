@@ -12,8 +12,12 @@ export interface User {
   role: UserRole;
   status: AccountStatus;
   statusReason?: string;
+  approvedAt?: string | Date;
+  rejectedAt?: string | Date;
+  suspendedAt?: string | Date;
   badges: string[];
   createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Question {

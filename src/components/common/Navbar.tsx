@@ -36,15 +36,10 @@ export function Navbar({ currentView, onNavigate }: NavbarProps) {
     }
     switch (user.status) {
       case 'approved':
-        return (
-          <span className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
-            Approved
-          </span>
-        );
       case 'pending':
         return (
-          <span className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse">
-            Pending Approval
+          <span className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+            Active Scholar
           </span>
         );
       case 'suspended':

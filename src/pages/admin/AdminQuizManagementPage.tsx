@@ -13,14 +13,41 @@ import {
   X,
   AlertCircle,
   Copy,
+  Sparkles,
+  Zap,
+  Bot,
+  Wand2,
+  CheckCircle2,
+  ChevronRight,
 } from 'lucide-react';
 import { api } from '../../services/api.ts';
 import { Quiz, Question } from '../../types/index.ts';
+
+const SUGGESTED_AI_TOPICS = [
+  'Data Structures & Algorithms (Trees, Graphs, Sorting)',
+  'Python Programming & Object-Oriented Design',
+  'Operating Systems (Processes, Concurrency & Memory)',
+  'Database Management & SQL Queries',
+  'Computer Networks, Protocols & OSI Layers',
+  'Machine Learning & Artificial Intelligence Basics',
+  'Cybersecurity & Network Defense',
+  'Web Development (React, Node.js & REST APIs)',
+];
 
 export function AdminQuizManagementPage() {
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // AI Quiz Generator Modal State
+  const [isAiModalOpen, setIsAiModalOpen] = useState(false);
+  const [aiTopic, setAiTopic] = useState('');
+  const [aiQuestionCount, setAiQuestionCount] = useState(5);
+  const [aiDifficulty, setAiDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
+  const [aiCategory, setAiCategory] = useState('Computer Science');
+  const [aiDuration, setAiDuration] = useState(10);
+  const [aiIsGenerating, setAiIsGenerating] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
 
   // Editor Modal State
   const [isEditorOpen, setIsEditorOpen] = useState(false);
@@ -70,6 +97,105 @@ export function AdminQuizManagementPage() {
   useEffect(() => {
     fetchQuizzes();
   }, []);
+
+  const handleOpenAiModal = () => {
+    setAiTopic('');
+    setAiQuestionCount(5);
+    setAiDifficulty('medium');
+    setAiCategory('Computer Science');
+    setAiDuration(10);
+    setAiError(null);
+    setIsAiModalOpen(true);
+  };
+
+  const handleGenerateAndPublishAiQuiz = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!aiTopic.trim()) {
+      setAiError('Please enter a topic for the quiz.');
+      return;
+    }
+
+    setAiError(null);
+    setAiIsGenerating(true);
+
+    try {
+      const res = await api.generateAdminQuizAi({
+        topic: aiTopic.trim(),
+        questionCount: aiQuestionCount,
+        difficulty: aiDifficulty,
+        category: aiCategory,
+        durationMinutes: aiDuration,
+        isPublished: true, // Immediately open to all registered students!
+      });
+
+      setMsg({
+        type: 'success',
+        text: `✨ Successfully generated and published "${res.quiz.title}"! It is now live in the Quiz Arena for all registered students.`,
+      });
+
+      setIsAiModalOpen(false);
+      fetchQuizzes();
+    } catch (err: any) {
+      setAiError(err.message || 'Failed to auto-generate quiz. Verify your topic and try again.');
+    } finally {
+      setAiIsGenerating(false);
+    }
+  };
+
+  const handleGenerateAndCustomizeInEditor = async () => {
+    if (!aiTopic.trim()) {
+      setAiError('Please enter a topic for the quiz.');
+      return;
+    }
+
+    setAiError(null);
+    setAiIsGenerating(true);
+
+    try {
+      const res = await api.generateAdminQuizAi({
+        topic: aiTopic.trim(),
+        questionCount: aiQuestionCount,
+        difficulty: aiDifficulty,
+        category: aiCategory,
+        durationMinutes: aiDuration,
+        isPublished: false, // Draft for customization
+      });
+
+      // Populate editor form with the generated quiz
+      const q = res.quiz;
+      setEditingQuizId(q._id);
+      setTitle(q.title);
+      setDescription(q.description);
+      setCategory(q.category);
+      setDifficulty(q.difficulty);
+      setDurationMinutes(q.durationMinutes);
+      setMarksPerCorrect(q.marksPerCorrect);
+      setNegativeMarks(q.negativeMarks || 0);
+      setPassingScore(q.passingScore);
+      setInstructions(q.instructions || '');
+      setIsPublished(true); // Default to publishing when saved
+      setRandomizeQuestions(q.randomizeQuestions);
+      setQuestions(
+        q.questions && q.questions.length > 0
+          ? q.questions.map((item) => ({
+              questionText: item.questionText,
+              options: item.options,
+              correctOption: item.correctOption ?? 0,
+              explanation: item.explanation || '',
+              marks: item.marks || q.marksPerCorrect,
+            }))
+          : []
+      );
+
+      setIsAiModalOpen(false);
+      setIsEditorOpen(true);
+      fetchQuizzes();
+    } catch (err: any) {
+      setAiError(err.message || 'Failed to generate quiz. Please try again.');
+    } finally {
+      setAiIsGenerating(false);
+    }
+  };
 
   const handleOpenCreateModal = () => {
     setEditingQuizId(null);
@@ -234,13 +360,23 @@ export function AdminQuizManagementPage() {
           </p>
         </div>
 
-        <button
-          onClick={handleOpenCreateModal}
-          className="px-5 py-2.5 rounded-xl font-bold text-xs bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 text-slate-950 shadow-[0_0_15px_rgba(245,158,11,0.3)] transition-all flex items-center gap-2 cursor-pointer self-start sm:self-auto"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Create New Quiz</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={handleOpenAiModal}
+            className="px-5 py-2.5 rounded-xl font-bold text-xs bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 hover:from-amber-400 hover:to-yellow-400 text-slate-950 shadow-[0_0_20px_rgba(245,158,11,0.45)] hover:scale-105 active:scale-95 transition-all flex items-center gap-2 cursor-pointer"
+          >
+            <Sparkles className="w-4 h-4 text-slate-950" />
+            <span>Auto-Generate Quiz with AI</span>
+          </button>
+
+          <button
+            onClick={handleOpenCreateModal}
+            className="px-4 py-2.5 rounded-xl font-semibold text-xs bg-slate-900/80 hover:bg-slate-800 text-amber-300 border border-amber-500/30 transition-all flex items-center gap-2 cursor-pointer"
+          >
+            <Plus className="w-4 h-4 text-amber-400" />
+            <span>Manual Create</span>
+          </button>
+        </div>
       </div>
 
       {msg && (
@@ -608,6 +744,226 @@ export function AdminQuizManagementPage() {
                 >
                   <Save className="w-4 h-4" />
                   <span>Save Quiz to Database</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* AI Quiz Generator Modal */}
+      {isAiModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+          <div className="navy-card max-w-xl w-full rounded-3xl p-6 sm:p-8 border border-amber-500/40 shadow-2xl relative space-y-5 overflow-hidden">
+            {/* Background Glow */}
+            <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-amber-500/20">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-amber-500 to-yellow-400 text-slate-950 flex items-center justify-center font-black shadow-lg">
+                  <Sparkles className="w-5 h-5 animate-spin-slow" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-display font-black text-white flex items-center gap-2">
+                    <span>Generate Quiz with Gemini AI</span>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                      Gemini 3.8 Flash
+                    </span>
+                  </h2>
+                  <p className="text-xs text-slate-400">
+                    Enter any academic topic; Gemini will create challenging collegiate questions and publish them.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => !aiIsGenerating && setIsAiModalOpen(false)}
+                disabled={aiIsGenerating}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer disabled:opacity-40"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {aiError && (
+              <div className="p-3.5 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+                <span>{aiError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleGenerateAndPublishAiQuiz} className="space-y-4">
+              {/* Topic Input */}
+              <div>
+                <label className="block text-xs font-bold text-slate-200 mb-1.5 flex items-center justify-between">
+                  <span>Academic Topic / Syllabus Focus</span>
+                  <span className="text-[10px] text-amber-400 font-normal">e.g. Data Structures, Python, OS</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Asynchronous JavaScript, Promises & Event Loop"
+                    value={aiTopic}
+                    onChange={(e) => setAiTopic(e.target.value)}
+                    disabled={aiIsGenerating}
+                    className="w-full px-4 py-2.5 bg-slate-950/90 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 disabled:opacity-50"
+                  />
+                </div>
+              </div>
+
+              {/* Quick Topic Chips */}
+              <div>
+                <span className="block text-[11px] font-semibold text-slate-400 mb-1.5">
+                  Suggested College Topics (1-Click Fill):
+                </span>
+                <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto no-scrollbar">
+                  {SUGGESTED_AI_TOPICS.map((topic, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      disabled={aiIsGenerating}
+                      onClick={() => setAiTopic(topic)}
+                      className="px-2.5 py-1 rounded-lg bg-slate-900/90 hover:bg-slate-800 text-[10px] text-slate-300 hover:text-amber-300 border border-slate-800 hover:border-amber-500/30 transition-all cursor-pointer"
+                    >
+                      {topic}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Grid: Questions count & Difficulty */}
+              <div className="grid grid-cols-2 gap-3.5">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Question Count
+                  </label>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {[3, 5, 10, 15].map((count) => (
+                      <button
+                        key={count}
+                        type="button"
+                        disabled={aiIsGenerating}
+                        onClick={() => {
+                          setAiQuestionCount(count);
+                          setAiDuration(count * 2);
+                        }}
+                        className={`py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                          aiQuestionCount === count
+                            ? 'bg-amber-500 text-slate-950 shadow'
+                            : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                        }`}
+                      >
+                        {count} Qs
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Difficulty Level
+                  </label>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {(['easy', 'medium', 'hard'] as const).map((diff) => (
+                      <button
+                        key={diff}
+                        type="button"
+                        disabled={aiIsGenerating}
+                        onClick={() => setAiDifficulty(diff)}
+                        className={`py-1.5 rounded-lg text-xs font-bold capitalize transition-all cursor-pointer ${
+                          aiDifficulty === diff
+                            ? diff === 'easy'
+                              ? 'bg-emerald-500 text-slate-950'
+                              : diff === 'medium'
+                              ? 'bg-amber-500 text-slate-950'
+                              : 'bg-rose-500 text-white'
+                            : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                        }`}
+                      >
+                        {diff}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Grid: Category & Duration */}
+              <div className="grid grid-cols-2 gap-3.5">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    Department / Category
+                  </label>
+                  <select
+                    value={aiCategory}
+                    disabled={aiIsGenerating}
+                    onChange={(e) => setAiCategory(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-950/90 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-amber-400"
+                  >
+                    <option value="Computer Science">Computer Science</option>
+                    <option value="Information Technology">Information Technology</option>
+                    <option value="Data Science & AI">Data Science & AI</option>
+                    <option value="Software Engineering">Software Engineering</option>
+                    <option value="Electronics & Communication">Electronics & Communication</option>
+                    <option value="Electrical Engineering">Electrical Engineering</option>
+                    <option value="Mechanical Engineering">Mechanical Engineering</option>
+                    <option value="Mathematics & Computing">Mathematics & Computing</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    Exam Duration (Minutes)
+                  </label>
+                  <input
+                    type="number"
+                    min={3}
+                    max={120}
+                    value={aiDuration}
+                    disabled={aiIsGenerating}
+                    onChange={(e) => setAiDuration(Number(e.target.value))}
+                    className="w-full px-3 py-2 bg-slate-950/90 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-amber-400"
+                  />
+                </div>
+              </div>
+
+              {/* Notice */}
+              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-center gap-2.5 text-xs text-amber-200">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>
+                  <strong>Open to registered students:</strong> Quiz will immediately go live in the Quiz Arena upon generation!
+                </span>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-col sm:flex-row items-center justify-end gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={handleGenerateAndCustomizeInEditor}
+                  disabled={aiIsGenerating || !aiTopic.trim()}
+                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-amber-300 border border-amber-500/30 text-xs font-semibold transition-all cursor-pointer disabled:opacity-40"
+                >
+                  <span>Generate & Preview in Editor</span>
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={aiIsGenerating || !aiTopic.trim()}
+                  className="w-full sm:w-auto px-6 py-2.5 rounded-xl font-bold text-xs bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 text-slate-950 shadow-[0_0_20px_rgba(245,158,11,0.4)] transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40"
+                >
+                  {aiIsGenerating ? (
+                    <>
+                      <div className="w-3.5 h-3.5 rounded-full border-2 border-slate-950 border-t-transparent animate-spin"></div>
+                      <span>Gemini is Drafting Questions...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Zap className="w-4 h-4" />
+                      <span>⚡ Generate & Open to Students</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>

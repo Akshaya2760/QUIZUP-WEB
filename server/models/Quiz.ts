@@ -12,6 +12,7 @@ export interface IQuestion {
 
 export interface IQuiz extends Document {
   _id: mongoose.Types.ObjectId;
+  id?: string;
   title: string;
   description: string;
   category: string;
@@ -55,6 +56,10 @@ const QuestionSchema = new Schema<IQuestion>({
 
 const QuizSchema = new Schema<IQuiz>(
   {
+    id: {
+      type: String,
+      default: () => 'quiz-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 8),
+    },
     title: { type: String, required: true, trim: true },
     description: { type: String, required: true, trim: true },
     category: { type: String, required: true, trim: true, default: 'General Computer Science' },

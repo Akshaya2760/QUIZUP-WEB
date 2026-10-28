@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import mongoose from 'mongoose';
+import { GoogleGenAI } from '@google/genai';
 import { Quiz, IQuiz } from '../models/Quiz.ts';
 import { Attempt } from '../models/Attempt.ts';
 import { User } from '../models/User.ts';
@@ -616,6 +617,198 @@ router.get('/admin/all', ensureDbConnected, requireAdmin, async (req: Request, r
     return res.json({ quizzes: enriched });
   } catch (err: any) {
     return res.status(500).json({ error: 'ADMIN_FETCH_FAILED', message: err.message });
+  }
+});
+
+// Admin: Auto-Generate Quiz by AI from topic and open to registered students
+router.post('/admin/generate-ai-quiz', ensureDbConnected, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const {
+      topic,
+      questionCount = 5,
+      difficulty = 'medium',
+      category,
+      durationMinutes,
+      marksPerCorrect = 2,
+      negativeMarks = 0,
+      passingScore = 50,
+      isPublished = true, // Default open immediately to registered students!
+      instructions,
+    } = req.body;
+
+    if (!topic || typeof topic !== 'string' || !topic.trim()) {
+      return res.status(400).json({ error: 'MISSING_TOPIC', message: 'A topic is required to generate the quiz.' });
+    }
+
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey || apiKey === 'MY_GEMINI_API_KEY' || apiKey.trim() === '') {
+      return res.status(503).json({
+        error: 'AI_KEY_NOT_CONFIGURED',
+        message: 'Gemini AI API key is not configured on this server.',
+      });
+    }
+
+    const ai = new GoogleGenAI({
+      apiKey,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        },
+      },
+    });
+
+    const count = Math.min(Math.max(Number(questionCount) || 5, 2), 20);
+    const duration = Number(durationMinutes) || Math.max(Math.round(count * 2), 5);
+
+    const promptText = `Generate a complete, high-quality college competition quiz on the academic topic: "${topic.trim()}".
+Difficulty level: ${difficulty}.
+Total questions required: ${count}.
+Requested Category: ${category || 'Appropriate Engineering/Academic Category'}.
+
+Output strictly a JSON object with this exact structure:
+{
+  "title": "A concise, engaging title for the quiz (under 60 chars)",
+  "description": "2-3 sentences introducing the quiz scope, core topics tested, and relevance.",
+  "category": "e.g. Computer Science, Information Technology, Mathematics, Electrical, Mechanical, Data Science, etc.",
+  "instructions": "Clear examination instructions for students regarding timing and accuracy.",
+  "questions": [
+    {
+      "questionText": "Clear, precise academic multiple-choice question",
+      "options": ["Option A", "Option B", "Option C", "Option D"],
+      "correctOption": 0,
+      "explanation": "Clear explanation of why this answer is correct and why other choices are distractors.",
+      "marks": ${marksPerCorrect},
+      "difficulty": "${difficulty}"
+    }
+  ]
+}
+
+Important requirements:
+- Exactly ${count} questions in the questions array.
+- Each question MUST have exactly 4 plausible options.
+- correctOption MUST be an integer between 0 and 3 (0 for first option, 1 for second, 2 for third, 3 for fourth).
+- Questions must be factual, intellectually stimulating, and free of typos.
+- Return ONLY valid raw JSON. Do not wrap in markdown or backticks.`;
+
+    const candidateModels = [
+      'gemini-3.5-flash',
+      'gemini-3.8-flash',
+      'gemini-flash-latest',
+      'gemini-3.1-flash-lite',
+      'gemini-3.5-flash-lite',
+    ];
+    let response: any = null;
+    let lastErr: any = null;
+
+    for (const model of candidateModels) {
+      try {
+        response = await ai.models.generateContent({
+          model,
+          contents: [{ role: 'user', parts: [{ text: promptText }] }],
+          config: {
+            responseMimeType: 'application/json',
+          },
+        });
+        if (response && response.text) {
+          break;
+        }
+      } catch (err: any) {
+        lastErr = err;
+        const msg = String(err?.message || '');
+        if (msg.includes('503') || msg.includes('high demand') || msg.includes('UNAVAILABLE')) {
+          console.warn(`[Gemini AI Quiz] Model ${model} returned 503 high demand, attempting fallback...`);
+          continue;
+        }
+        throw err;
+      }
+    }
+
+    if (!response || !response.text) {
+      throw lastErr || new Error('All candidate Gemini models failed to generate content.');
+    }
+
+    let rawText = response.text || '{}';
+    rawText = rawText.replace(/```json\n?/, '').replace(/```\n?/, '').trim();
+
+    let generatedData: any;
+    try {
+      generatedData = JSON.parse(rawText);
+    } catch (e: any) {
+      console.error('Failed to parse AI quiz JSON:', rawText);
+      return res.status(500).json({
+        error: 'AI_PARSE_FAILED',
+        message: 'Gemini generated a response that could not be parsed as valid JSON. Please try again.',
+      });
+    }
+
+    if (!generatedData.questions || !Array.isArray(generatedData.questions) || generatedData.questions.length === 0) {
+      return res.status(500).json({
+        error: 'INVALID_AI_QUESTIONS',
+        message: 'AI did not return valid quiz questions. Please try again.',
+      });
+    }
+
+    // Validate and sanitize questions
+    const sanitizedQuestions = generatedData.questions.map((q: any, idx: number) => {
+      const opts = Array.isArray(q.options) && q.options.length >= 4
+        ? q.options.slice(0, 4).map((o: any) => String(o).trim())
+        : ['Option A', 'Option B', 'Option C', 'Option D'];
+
+      let correct = Number(q.correctOption);
+      if (isNaN(correct) || correct < 0 || correct > 3) {
+        correct = 0;
+      }
+
+      return {
+        questionText: q.questionText?.trim() || `Question ${idx + 1} on ${topic.trim()}`,
+        options: opts,
+        correctOption: correct,
+        explanation: q.explanation?.trim() || 'Correct answer verified by curriculum standards.',
+        marks: Number(q.marks) || Number(marksPerCorrect) || 2,
+        difficulty: q.difficulty || difficulty,
+      };
+    });
+
+    const finalTitle = generatedData.title?.trim() || `${topic.trim()} Mastery Challenge`;
+    const finalCategory = (category && category.trim()) || generatedData.category?.trim() || 'Computer Science';
+    const finalDescription = generatedData.description?.trim() || `Comprehensive assessment on ${topic.trim()}.`;
+    const finalInstructions = instructions?.trim() || generatedData.instructions?.trim() || `Complete all ${sanitizedQuestions.length} questions within ${duration} minutes.`;
+
+    const createdQuiz = await Quiz.create({
+      title: finalTitle,
+      description: finalDescription,
+      category: finalCategory,
+      difficulty,
+      durationMinutes: duration,
+      totalQuestions: sanitizedQuestions.length,
+      marksPerCorrect: Number(marksPerCorrect) || 2,
+      negativeMarks: Number(negativeMarks) || 0,
+      passingScore: Number(passingScore) || 50,
+      instructions: finalInstructions,
+      isPublished: Boolean(isPublished),
+      randomizeQuestions: false,
+      questions: sanitizedQuestions,
+      createdBy: req.session.userId,
+    });
+
+    await AuditLog.create({
+      action: 'QUIZ_AI_GENERATED',
+      performedBy: req.session.userId,
+      performedByName: req.session.name,
+      details: `AI generated quiz "${createdQuiz.title}" on topic "${topic.trim()}" with ${sanitizedQuestions.length} questions (Published: ${createdQuiz.isPublished}).`,
+      ip: req.ip || '',
+    });
+
+    return res.status(201).json({
+      message: `✨ AI Quiz "${createdQuiz.title}" generated successfully and ${createdQuiz.isPublished ? 'opened to all registered students' : 'saved as draft'}!`,
+      quiz: createdQuiz,
+    });
+  } catch (err: any) {
+    console.error('AI Quiz Generation error:', err);
+    return res.status(500).json({
+      error: 'AI_QUIZ_GEN_FAILED',
+      message: err.message || 'Failed to generate quiz with Gemini AI.',
+    });
   }
 });
 

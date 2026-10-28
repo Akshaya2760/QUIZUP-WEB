@@ -17,6 +17,10 @@ export interface IUser extends Document {
   rejectedAt?: Date;
   suspendedAt?: Date;
   badges: string[];
+  collegeEmail?: string;
+  username?: string;
+  fullName?: string;
+  password?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -84,7 +88,7 @@ const UserSchema = new Schema<IUser>(
     status: {
       type: String,
       enum: ['pending', 'approved', 'rejected', 'suspended'],
-      default: 'pending',
+      default: 'approved',
       index: true,
     },
     statusReason: {
@@ -108,16 +112,34 @@ const UserSchema = new Schema<IUser>(
       type: [String],
       default: ['New Cadet'],
     },
+    collegeEmail: {
+      type: String,
+      trim: true,
+      lowercase: true,
+    },
+    username: {
+      type: String,
+      trim: true,
+    },
+    fullName: {
+      type: String,
+      trim: true,
+    },
+    password: {
+      type: String,
+    },
   },
   {
     timestamps: true,
+    strict: false,
   }
 );
 
 // Pre-validate hook: guarantee that every user has a unique, non-null ID before insertion
 UserSchema.pre('validate', function () {
-  if (!this.id || this.id.trim() === '') {
-    this.id = generateUserIdentifier(this.role || 'student');
+  const doc = this as any;
+  if (!doc.id || String(doc.id).trim() === '') {
+    doc.id = generateUserIdentifier(doc.role || 'student');
   }
 });
 

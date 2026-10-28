@@ -13,6 +13,7 @@ export interface IQuestionResult {
 
 export interface IAttempt extends Document {
   _id: mongoose.Types.ObjectId;
+  id?: string;
   quizId: mongoose.Types.ObjectId;
   quizTitle: string;
   quizCategory: string;
@@ -55,6 +56,10 @@ const QuestionResultSchema = new Schema<IQuestionResult>(
 
 const AttemptSchema = new Schema<IAttempt>(
   {
+    id: {
+      type: String,
+      default: () => 'att-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 8),
+    },
     quizId: { type: Schema.Types.ObjectId, ref: 'Quiz', required: true, index: true },
     quizTitle: { type: String, required: true },
     quizCategory: { type: String, default: 'General' },

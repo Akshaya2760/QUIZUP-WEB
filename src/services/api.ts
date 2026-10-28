@@ -10,6 +10,24 @@ import {
 
 const API_BASE = '/api';
 
+function buildQuery(params?: Record<string, any>): string {
+  if (!params) return '';
+  const searchParams = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (
+      value !== undefined &&
+      value !== null &&
+      value !== '' &&
+      value !== 'undefined' &&
+      value !== 'null'
+    ) {
+      searchParams.append(key, String(value));
+    }
+  }
+  const str = searchParams.toString();
+  return str ? `?${str}` : '';
+}
+
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const url = `${API_BASE}${endpoint}`;
   const token = typeof window !== 'undefined' ? localStorage.getItem('quizup_token') : null;
@@ -110,8 +128,7 @@ export const api = {
 
   // Quizzes (Student)
   getQuizzes: (params?: { category?: string; difficulty?: string; search?: string }) => {
-    const query = new URLSearchParams(params as any).toString();
-    return request<{ quizzes: Quiz[] }>(`/quizzes${query ? `?${query}` : ''}`);
+    return request<{ quizzes: Quiz[] }>(`/quizzes${buildQuery(params)}`);
   },
 
   getQuizDetails: (id: string) =>
@@ -147,14 +164,19 @@ export const api = {
     }>('/results/my-history'),
 
   getLeaderboard: (params?: { quizId?: string; category?: string }) => {
-    const query = new URLSearchParams(params as any).toString();
-    return request<{ leaderboard: LeaderboardEntry[] }>(`/results/leaderboard${query ? `?${query}` : ''}`);
+    return request<{ leaderboard: LeaderboardEntry[] }>(`/results/leaderboard${buildQuery(params)}`);
   },
 
   // Announcements
   getAnnouncements: () => request<{ announcements: Announcement[] }>('/announcements'),
 
-  // AI Assistant
+  // AI Assistant & Chatbot
+  chatWithAi: (data: { message: string; history?: Array<{ role: 'user' | 'model'; text: string }> }) =>
+    request<{ available: boolean; reply?: string; error?: string; message?: string }>('/ai/chat', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
   askAi: (data: { prompt: string; topic?: string; context?: any }) =>
     request<{ available: boolean; answer?: string; error?: string; message?: string }>('/ai/ask', {
       method: 'POST',
@@ -197,8 +219,7 @@ export const api = {
     }>('/admin/stats'),
 
   getAdminStudents: (params?: { search?: string; status?: string; department?: string; limit?: number; skip?: number }) => {
-    const query = new URLSearchParams(params as any).toString();
-    return request<{ students: User[]; total: number; limit: number; skip: number }>(`/admin/students?${query}`);
+    return request<{ students: User[]; total: number; limit: number; skip: number }>(`/admin/students${buildQuery(params)}`);
   },
 
   approveStudent: (id: string) =>
@@ -223,6 +244,23 @@ export const api = {
 
   getAdminQuizzes: () => request<{ quizzes: Quiz[] }>('/quizzes/admin/all'),
 
+  generateAdminQuizAi: (data: {
+    topic: string;
+    questionCount?: number;
+    difficulty?: 'easy' | 'medium' | 'hard';
+    category?: string;
+    durationMinutes?: number;
+    marksPerCorrect?: number;
+    negativeMarks?: number;
+    passingScore?: number;
+    isPublished?: boolean;
+    instructions?: string;
+  }) =>
+    request<{ message: string; quiz: Quiz }>('/quizzes/admin/generate-ai-quiz', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
   createAdminQuiz: (quizData: Partial<Quiz>) =>
     request<{ message: string; quiz: Quiz }>('/quizzes/admin/create', {
       method: 'POST',
@@ -245,8 +283,7 @@ export const api = {
     request<{ message: string }>(`/quizzes/admin/${id}`, { method: 'DELETE' }),
 
   getAdminSubmissions: (params?: { quizId?: string; search?: string; status?: string }) => {
-    const query = new URLSearchParams(params as any).toString();
-    return request<{ submissions: any[] }>(`/results/admin/all-submissions?${query}`);
+    return request<{ submissions: any[] }>(`/results/admin/all-submissions${buildQuery(params)}`);
   },
 
   createAnnouncement: (data: {

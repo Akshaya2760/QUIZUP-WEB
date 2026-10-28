@@ -29,12 +29,10 @@ export function StudentLoginPage({ onNavigate }: StudentLoginPageProps) {
 
       if (loggedUser.role === 'admin') {
         onNavigate('admin-dashboard');
-      } else if (loggedUser.status === 'approved') {
-        onNavigate('student-dashboard');
-      } else if (loggedUser.status === 'pending') {
-        onNavigate('pending-approval');
-      } else {
+      } else if (loggedUser.status === 'suspended' || loggedUser.status === 'rejected') {
         onNavigate('account-status');
+      } else {
+        onNavigate('student-dashboard');
       }
     } catch (err: any) {
       setError(err.message || 'Invalid credentials or connection issue.');

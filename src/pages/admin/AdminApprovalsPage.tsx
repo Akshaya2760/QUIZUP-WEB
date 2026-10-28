@@ -27,12 +27,13 @@ import { useAuth } from '../../context/AuthContext.tsx';
 
 interface AdminApprovalsPageProps {
   onNavigate?: (view: string) => void;
+  initialFilter?: string;
 }
 
-export function AdminApprovalsPage({ onNavigate }: AdminApprovalsPageProps) {
+export function AdminApprovalsPage({ onNavigate, initialFilter = 'pending' }: AdminApprovalsPageProps) {
   const { user, login, bootstrapAdmin } = useAuth();
   const [students, setStudents] = useState<User[]>([]);
-  const [statusFilter, setStatusFilter] = useState('pending');
+  const [statusFilter, setStatusFilter] = useState(initialFilter);
   const [departmentFilter, setDepartmentFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -67,11 +68,18 @@ export function AdminApprovalsPage({ onNavigate }: AdminApprovalsPageProps) {
   const fetchStudents = async () => {
     setIsLoading(true);
     try {
-      const res = await api.getAdminStudents({
-        status: statusFilter,
-        department: departmentFilter !== 'all' ? departmentFilter : undefined,
-        search: search.trim() || undefined,
-      });
+      const cleanParams: { status?: string; department?: string; search?: string } = {};
+      if (statusFilter && statusFilter !== 'all') {
+        cleanParams.status = statusFilter;
+      }
+      if (departmentFilter && departmentFilter !== 'all') {
+        cleanParams.department = departmentFilter;
+      }
+      if (search && search.trim()) {
+        cleanParams.search = search.trim();
+      }
+
+      const res = await api.getAdminStudents(cleanParams);
       setStudents(res.students || []);
       setAuthRequired(false);
 
@@ -538,10 +546,23 @@ export function AdminApprovalsPage({ onNavigate }: AdminApprovalsPageProps) {
             <p className="text-xs font-semibold text-slate-300">
               No student records found under filter "{statusFilter}".
             </p>
+            {search && (
+              <div className="pt-2">
+                <button
+                  onClick={() => setSearch('')}
+                  className="px-4 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs font-semibold cursor-pointer border border-amber-500/20"
+                >
+                  Clear search: "{search}"
+                </button>
+              </div>
+            )}
             {statusFilter === 'pending' && statsSummary.approved > 0 && (
               <div className="pt-2">
                 <button
-                  onClick={() => setStatusFilter('approved')}
+                  onClick={() => {
+                    setStatusFilter('approved');
+                    setSearch('');
+                  }}
                   className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs shadow inline-flex items-center gap-2 cursor-pointer transition-all"
                 >
                   <CheckCircle className="w-4 h-4" />
@@ -549,12 +570,29 @@ export function AdminApprovalsPage({ onNavigate }: AdminApprovalsPageProps) {
                 </button>
               </div>
             )}
-            {statusFilter !== 'all' && statusFilter !== 'pending' && (
+            {statusFilter === 'approved' && statsSummary.pending > 0 && (
+              <div className="pt-2">
+                <button
+                  onClick={() => {
+                    setStatusFilter('pending');
+                    setSearch('');
+                  }}
+                  className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow inline-flex items-center gap-2 cursor-pointer transition-all"
+                >
+                  <Users className="w-4 h-4" />
+                  <span>View Pending Requests ({statsSummary.pending})</span>
+                </button>
+              </div>
+            )}
+            {statusFilter !== 'all' && (
               <button
-                onClick={() => setStatusFilter('all')}
-                className="text-xs text-amber-400 underline hover:text-amber-300 cursor-pointer block mx-auto"
+                onClick={() => {
+                  setStatusFilter('all');
+                  setSearch('');
+                }}
+                className="text-xs text-amber-400 underline hover:text-amber-300 cursor-pointer block mx-auto mt-2"
               >
-                View all registered students
+                View all registered students ({statsSummary.total})
               </button>
             )}
           </div>
@@ -567,14 +605,17 @@ export function AdminApprovalsPage({ onNavigate }: AdminApprovalsPageProps) {
                   <th className="py-3.5 px-4 font-bold">Student ID</th>
                   <th className="py-3.5 px-4 font-bold">Department & Year</th>
                   <th className="py-3.5 px-4 font-bold">Status</th>
-                  <th className="py-3.5 px-4 font-bold">Registered On</th>
+                  <th className="py-3.5 px-4 font-bold">
+                    {statusFilter === 'approved' ? 'Approved / Registered' : 'Registered On'}
+                  </th>
                   <th className="py-3.5 px-4 font-bold text-right">Approval Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">
                 {students.map((student) => {
+                  const sId = (student.id || student._id || '') as string;
                   return (
-                    <tr key={student.id || student._id} className="hover:bg-slate-900/50 text-slate-300 transition-colors">
+                    <tr key={sId || student.email} className="hover:bg-slate-900/50 text-slate-300 transition-colors">
                       <td className="py-3.5 px-4">
                         <div>
                           <p className="font-bold text-white">{student.name}</p>
@@ -613,7 +654,16 @@ export function AdminApprovalsPage({ onNavigate }: AdminApprovalsPageProps) {
                       </td>
 
                       <td className="py-3.5 px-4 text-slate-400 text-[11px]">
-                        {student.createdAt ? new Date(student.createdAt).toLocaleDateString() : 'N/A'}
+                        {student.status === 'approved' && student.approvedAt ? (
+                          <div>
+                            <span className="text-emerald-400 font-semibold">Approved: </span>
+                            {new Date(student.approvedAt).toLocaleDateString()}
+                          </div>
+                        ) : student.createdAt ? (
+                          new Date(student.createdAt).toLocaleDateString()
+                        ) : (
+                          <span className="text-emerald-400 font-semibold">Active Scholar</span>
+                        )}
                       </td>
 
                       <td className="py-3.5 px-4 text-right">
@@ -621,7 +671,7 @@ export function AdminApprovalsPage({ onNavigate }: AdminApprovalsPageProps) {
                           {student.status === 'pending' && (
                             <>
                               <button
-                                onClick={() => handleApprove(student.id || student._id, student.name)}
+                                onClick={() => handleApprove(sId, student.name)}
                                 className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center gap-1 shadow-sm transition-colors cursor-pointer"
                               >
                                 <Check className="w-3.5 h-3.5" />
@@ -631,7 +681,7 @@ export function AdminApprovalsPage({ onNavigate }: AdminApprovalsPageProps) {
                               <button
                                 onClick={() =>
                                   setReasonModal({
-                                    studentId: student.id || student._id,
+                                    studentId: sId,
                                     studentName: student.name,
                                     action: 'reject',
                                   })
@@ -647,7 +697,7 @@ export function AdminApprovalsPage({ onNavigate }: AdminApprovalsPageProps) {
                             <button
                               onClick={() =>
                                 setReasonModal({
-                                  studentId: student.id || student._id,
+                                  studentId: sId,
                                   studentName: student.name,
                                   action: 'suspend',
                                 })
@@ -660,7 +710,7 @@ export function AdminApprovalsPage({ onNavigate }: AdminApprovalsPageProps) {
 
                           {(student.status === 'suspended' || student.status === 'rejected') && (
                             <button
-                              onClick={() => handleReactivate(student.id || student._id, student.name)}
+                              onClick={() => handleReactivate(sId, student.name)}
                               className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-400 font-semibold text-xs flex items-center gap-1 border border-amber-500/30 transition-colors cursor-pointer"
                             >
                               <RotateCcw className="w-3.5 h-3.5" />

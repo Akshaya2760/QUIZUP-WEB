@@ -62,8 +62,8 @@ export function StudentRegisterPage({ onNavigate }: StudentRegisterPageProps) {
         password,
       });
 
-      // Newly registered accounts are pending approval by default
-      onNavigate('pending-approval');
+      // Direct registration: account is immediately active and open
+      onNavigate('student-dashboard');
     } catch (err: any) {
       setError(err.message || 'Registration failed. Please verify your details.');
     } finally {
@@ -86,7 +86,7 @@ export function StudentRegisterPage({ onNavigate }: StudentRegisterPageProps) {
           <div className="text-center mb-6">
             <h2 className="text-2xl font-display font-extrabold text-white">Student Registration</h2>
             <p className="text-xs text-slate-400 mt-1">
-              Join the institutional arena. Accounts are verified by college administrators.
+              Join the collegiate competition arena. Immediate access to quizzes, rankings, and AI mentoring.
             </p>
           </div>
 
@@ -214,10 +214,12 @@ export function StudentRegisterPage({ onNavigate }: StudentRegisterPageProps) {
               </div>
             </div>
 
-            <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-200">
-              <span className="font-semibold text-amber-300">Approval Policy: </span>
-              Your registration will be placed in a <span className="font-bold underline">Pending</span> state.
-              An administrator will verify your student ID before activating quiz access.
+            <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-[11px] text-emerald-200 flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>
+                <strong className="text-emerald-300">Instant Access: </strong>
+                No admin approval required. Once registered, your account is immediately active and you can start taking quizzes right away!
+              </span>
             </div>
 
             <button

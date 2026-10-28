@@ -10,6 +10,7 @@ import {
   AlertCircle,
   CheckCircle2,
   Lightbulb,
+  X,
 } from 'lucide-react';
 import { api } from '../../services/api.ts';
 import { useAuth } from '../../context/AuthContext.tsx';
@@ -80,7 +81,12 @@ What concept or quiz topic would you like to master today?`,
         setAiError(res.message || 'Gemini API is not configured or reached quota limits.');
       }
     } catch (err: any) {
-      setAiError(err.message || 'Failed to generate study advice.');
+      const errMsg = err?.message || '';
+      if (errMsg.includes('500') || errMsg.includes('503') || errMsg.includes('demand')) {
+        setAiError('The AI model experienced a brief network demand spike. Multi-model failover has engaged—please tap "Ask Professor Byte" again to get your answer.');
+      } else {
+        setAiError(errMsg || 'Failed to generate study advice. Please try again.');
+      }
     } finally {
       setIsAsking(false);
     }
@@ -190,12 +196,21 @@ What concept or quiz topic would you like to master today?`,
       </div>
 
       {aiError && (
-        <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs flex items-start gap-3">
-          <AlertCircle className="w-5 h-5 shrink-0 text-amber-400 mt-0.5" />
-          <div>
-            <p className="font-semibold text-amber-300">Notice about Gemini AI Assistant:</p>
-            <p className="text-[11px] mt-0.5 text-slate-300">{aiError}</p>
+        <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs flex items-start justify-between gap-3 animate-in fade-in">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 shrink-0 text-amber-400 mt-0.5" />
+            <div>
+              <p className="font-semibold text-amber-300">Notice about Gemini AI Assistant:</p>
+              <p className="text-[11px] mt-0.5 text-slate-300">{aiError}</p>
+            </div>
           </div>
+          <button
+            onClick={() => setAiError(null)}
+            className="p-1 hover:bg-amber-500/20 rounded-lg text-amber-400 hover:text-white transition-colors cursor-pointer"
+            title="Dismiss notice"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
 
